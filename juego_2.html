@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bola que rebota</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            overflow: hidden;
+            /* Para evitar la barra de desplazamiento */
+        }
+
+        #gameCanvas {
+            background-color: #222;
+            /* Fondo oscuro para el juego */
+            border-radius: 12px;
+            /* Bordes redondeados */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+            /* Sombra suave */
+            display: block;
+            /* Asegura que el canvas se comporte como un bloque */
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 16px;
+            font-family: 'Arial', sans-serif;
+            z-index: 10;
+            /* Asegura que la información esté por encima del canvas */
+            text-align: left;
+            /* Alineación por defecto */
+            width: 100%;
+            /* Ancho completo para centrar en móvil */
+        }
+
+        #gameOverOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            /* Fondo oscuro semi-transparente */
+            display: none;
+            /* Inicialmente oculto */
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 11;
+            /* Estará por encima de todo */
+        }
+
+        #gameOverOverlay h2 {
+            font-size: 36px;
+            color: #fff;
+            margin-bottom: 20px;
+        }
+
+        #gameOverOverlay p {
+            font-size: 24px;
+            color: #eee;
+            margin-bottom: 30px;
+        }
+
+        #gameOverOverlay button {
+            background-color: #4CAF50;
+            /* Verde */
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 20px;
+            transition: background-color 0.3s ease;
+        }
+
+        #gameOverOverlay button:hover {
+            background-color: #45a049;
+            /* Verde más oscuro */
+        }
+
+        @media screen and (max-width: 600px) {
+            #info {
+                font-size: 24px;
+                /* Aumentamos el tamaño de la fuente */
+                top: 10px;
+                /* Ajustamos la posición vertical */
+                left: 0;
+                /* Reiniciamos la posición izquierda */
+                text-align: center;
+                /* Centramos el texto */
+                width: 100%;
+                /* Aseguramos que ocupe todo el ancho */
+            }
+
+            #gameOverOverlay h2 {
+                font-size: 24px;
+            }
+
+            #gameOverOverlay p {
+                font-size: 18px;
+            }
+
+            #gameOverOverlay button {
+                font-size: 18px;
+                padding: 12px 24px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="info"></div>
+    <div id="gameOverOverlay">
+        <h2>Game Over</h2>
+        <p>Puntuación: <span id="finalScore">0</span></p>
+        <button id="restartButton">Restart</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const infoDisplay = document.getElementById('info');
+        const gameOverOverlay = document.getElementById('gameOverOverlay');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const restartButton = document.getElementById('restartButton');
+
+        let bola = {
+            x: 100,
+            y: canvas.height / 2,
+            radio: 15,
+            velocidadX: 5,
+            velocidadY: 5,
+            color: 'white'
+        };
+
+        let anillo = {
+            x: canvas.width + 50,
+            y: canvas.height / 2,
+            radioInterior: 50,
+            radioExterior: 70,
+            ancho: 10,
+            velocidad: 2,
+            color: 'white',
+            hue: 0, // Para el cambio de color
+        };
+
+        let anillos = [];
+        let hue = 0;
+        let score = 0;
+        let tiempoTranscurrido = 0;
+        let gameOver = false;
+        let disparoFuegosArtificiales = false;
+        let gameOverX,
+            gameOverY; // Para almacenar la posición del Game Over
+
+        const particulas = [];
+        const gravedad = 0.1;
+        const amortiguacion = 0.8;
+        let rafagaEnCurso = false; // Para controlar si una ráfaga está en curso
+        let cantidadRafagas = 0; // Para contar cuántas ráfagas se han disparado
+        const maxRafagas = 3; // Máximo de ráfagas permitidas
+
+        const coloresFuegosArtificiales = [
+            'rgba(255, 0, 0, 0.9)', // Rojo
+            'rgba(0, 255, 0, 0.9)', // Verde
+            'rgba(0, 0, 255, 0.9)', // Azul
+            'rgba(255, 255, 0, 0.9)', // Amarillo
+            'rgba(255, 0, 255, 0.9)', // Magenta
+            'rgba(0, 255, 255, 0.9)', // Cian
+            'rgba(255, 165, 0, 0.9)', // Naranja
+            'rgba(128, 0, 128, 0.9)', // Púrpura
+        ];
+
+        const fuegosArtificiales = [];
+
+        // Variables para el Impulso
+        let enImpulso = false;
+        let duracionImpulso = 100; // Milisegundos que dura el impulso
+        let tiempoInicioImpulso = 0;
+        let velocidadBaseX = 5; // Velocidad base inicial en X
+        let velocidadBaseY = 5; // Velocidad base inicial en Y
+
+        function crearAnillo() {
+            let nuevoAnillo = {
+                x: canvas.width + 50,
+                y: Math.random() * (canvas.height - 100) + 50,
+                radioInterior: 50,
+                radioExterior: 70,
+                ancho: 10,
+                velocidad: 2 + Math.random() * 1,
+                color: 'white',
+                hue: Math.random() * 360,
+            };
+            anillos.push(nuevoAnillo);
+        }
+
+        function inicializarAnillos() {
+            anillos = [];
+            crearAnillo();
+            crearAnillo();
+            crearAnillo();
+        }
+
+        function actualizarAnillos() {
+            if (anillos.length === 0) {
+                crearAnillo();
+            }
+
+            for (let i = 0; i < anillos.length; i++) {
+                anillos[i].x -= anillos[i].velocidad;
+                if (anillos[i].x < -100) {
+                    anillos.splice(i, 1);
+                    i--;
+                    score += 10;
+                    if (score % 50 == 0) {
+                        crearRafagaParticulas(bola.x, bola.y, 20);
+                    }
+                }
+            }
+        }
+
+        function dibujarAnillos() {
+            for (let i = 0; i < anillos.length; i++) {
+                const anilloActual = anillos[i];
+                ctx.beginPath();
+                ctx.arc(anilloActual.x, anilloActual.y, anilloActual.radioExterior, 0, Math.PI * 2);
+                ctx.arc(anilloActual.x, anilloActual.y, anilloActual.radioInterior, 0, Math.PI * 2, true);
+                ctx.closePath();
+                ctx.strokeStyle = `hsl(${anilloActual.hue}, 100%, 50%)`;
+                ctx.lineWidth = anilloActual.ancho;
+                ctx.stroke();
+                anilloActual.hue = (anilloActual.hue + 2) % 360;
+            }
+        }
+
+        function actualizarBolita() {
+            bola.x += bola.velocidadX;
+            bola.y += bola.velocidadY;
+
+            // Rebote con las paredes
+            if (bola.y + bola.radio > canvas.height || bola.y - bola.radio < 0) {
+                bola.velocidadY = -bola.velocidadY;
+            }
+
+            // Acelerar la bola gradualmente
+            bola.velocidadX += 0.05;
+
+            // Gestionar el impulso
+            if (enImpulso) {
+                const tiempoTranscurrido = Date.now() - tiempoInicioImpulso;
+                const progreso = tiempoTranscurrido / duracionImpulso;
+
+                if (progreso < 1) {
+                    // Reducir gradualmente el efecto del impulso
+                    const factorReduccion = 1 - progreso;
+                    velocidadBolitaX = velocidadBaseX + (velocidadBolitaX - velocidadBaseX) * factorReduccion;
+                    velocidadBolitaY = velocidadBaseY + (velocidadBolitaY - velocidadBaseY) * factorReduccion;
+                } else {
+                    // Volver a la velocidad base
+                    velocidadBolitaX = velocidadBaseX;
+                    velocidadBolitaY = velocidadBaseY;
+                    enImpulso = false;
+                }
+            }
+
+            // Game Over: cuando la bola sale de la pantalla
+            if (bola.x + bola.radio < 0 || bola.x - bola.radio > canvas.width) {
+                gameOver = true;
+                dispararFuegosArtificiales = true;
+                gameOverX = bola.x; // Guardar la posición de la bola al morir
+                gameOverY = bola.y;
+                finalScoreDisplay.textContent = score;
+                gameOverOverlay.style.display = 'flex';
+            }
+        }
+
+        function dibujarBolita() {
+            ctx.beginPath();
+            ctx.arc(bola.x, bola.y, bola.radio, 0, Math.PI * 2);
+            ctx.fillStyle = bola.color;
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function estaColision(circ1, circ2) {
+            const dx = circ1.x - circ2.x;
+            const dy = circ1.y - circ2.y;
+            const distancia = Math.sqrt(dx * dx + dy * dy);
+            if (distancia < circ1.radio + circ2.radio) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        function crearParticula(x, y, color) {
+            return {
+                x: x,
+                y: y,
+                radio: Math.random() * 4 + 2,
+                color: color,
+                velocidadX: Math.random() * 6 - 3,
+                velocidadY: Math.random() * 6 - 3,
+                gravedad: 0.3,
+                alpha: 1,
+                decay: 0.02
+            };
+        }
+
+        function crearRafagaParticulas(x, y, cantidad) {
+            if (rafagaEnCurso) return; // Si ya hay una ráfaga en curso, no crear otra
+            rafagaEnCurso = true; // Indicar que una ráfaga está en curso
+            cantidadRafagas++; // Incrementar el contador de ráfagas
+
+            for (let i = 0; i < cantidad; i++) {
+                const color = `hsl(${Math.random() * 360}, 100%, 50%)`;
+                particulas.push(crearParticula(x, y, color));
+            }
+
+            setTimeout(() => {
+                rafagaEnCurso = false; // Permitir nuevas ráfagas después de un tiempo
+                if (cantidadRafagas < maxRafagas) {
+                    crearRafagaParticulas(x, y, cantidad); // Iniciar otra ráfaga automáticamente
+                }
+            }, 300); // Esperar 300ms antes de permitir otra ráfaga
+        }
+
+        function actualizarYDibujarParticulas() {
+            for (let i = 0; i < particulas.length; i++) {
+                particulas[i].x += particulas[i].velocidadX;
+                particulas[i].y += particulas[i].velocidadY;
+                particulas[i].velocidadY += particulas[i].gravedad;
+                particulas[i].alpha -= particulas[i].decay;
+
+                if (particulas[i].alpha <= 0) {
+                    particulas.splice(i, 1);
+                    i--;
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(particulas[i].x, particulas[i].y, particulas[i].radio, 0, Math.PI * 2);
+                    ctx.fillStyle = particulas[i].color;
+                    ctx.globalAlpha = particulas[i].alpha;
+                    ctx.fill();
+                    ctx.closePath();
+                    ctx.globalAlpha = 1; // Restablecer la opacidad
+                }
+            }
+        }
+
+        // Funciones para los fuegos artificiales
+        function crearFuegoArtificial(x, y) {
+            const color = coloresFuegosArtificiales[Math.floor(Math.random() * coloresFuegosArtificiales.length)];
+            for (let i = 0; i < 100; i++) { // Más partículas para una explosión más grande
+                fuegosArtificiales.push({
+                    x: x,
+                    y: y,
+                    radio: Math.random() * 3 + 1,
+                    color: color,
+                    velocidadX: Math.random() * 10 - 5,
+                    velocidadY: Math.random() * 10 - 5,
+                    gravedad: 0.1,
+                    alpha: 1,
+                    decay: 0.015 + Math.random() * 0.01, // Variar el decaimiento para un efecto más natural
+                    tipo: 'particula' // Para distinguir entre partículas de fuegos artificiales y otras
+                });
+            }
+        }
+
+        function actualizarYDibujarFuegosArtificiales() {
+            for (let i = 0; i < fuegosArtificiales.length; i++) {
+                fuegosArtificiales[i].x += fuegosArtificiales[i].velocidadX;
+                fuegosArtificiales[i].y += fuegosArtificiales[i].velocidadY;
+                fuegosArtificiales[i].velocidadY += fuegosArtificiales[i].gravedad;
+                fuegosArtificiales[i].alpha -= fuegosArtificiales[i].decay;
+
+                if (fuegosArtificiales[i].alpha <= 0) {
+                    fuegosArtificiales.splice(i, 1);
+                    i--;
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(fuegosArtificiales[i].x, fuegosArtificiales[i].y, fuegosArtificiales[i].radio, 0, Math.PI * 2);
+                    ctx.fillStyle = fuegosArtificiales[i].color;
+                    ctx.globalAlpha = fuegosArtificiales[i].alpha;
+                    ctx.fill();
+                    ctx.closePath();
+                    ctx.globalAlpha = 1;
+                }
+            }
+        }
+
+        function dibujarGameOver() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.font = '48px Arial';
+            ctx.fillStyle = '#fff';
+            ctx.textAlign = 'center';
+            ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2 - 50);
+
+            ctx.font = '24px Arial';
+            ctx.fillStyle = '#eee';
+            ctx.fillText(`Puntuación: ${score}`, canvas.width / 2, canvas.height / 2);
+
+            // Botón de restart
+            restartButton.style.display = 'block';
+            restartButton.addEventListener('click', () => {
+                gameOverOverlay.style.display = 'none';
+                gameOver = false;
+                dispararFuegosArtificiales = false;
+                fuegosArtificiales.length = 0;
+                particulas.length = 0;
+                score = 0;
+                tiempoTranscurrido = 0;
+                bola.x = 100;
+                bola.y = canvas.height / 2;
+                bola.velocidadX = 5;
+                bola.velocidadY = 5;
+                inicializarAnillos();
+                bucleJuego();
+            });
+        }
+
+
+        function mostrarInfo() {
+            infoDisplay.innerHTML = `Puntuación: ${score}  <br> Tiempo: ${tiempoTranscurrido.toFixed(0)}s`;
+        }
+
+        function actualizarJuego() {
+            if (!gameOver) {
+                tiempoTranscurrido += 0.02; // Actualizar cada 20ms
+                actualizarAnillos();
+                actualizarBolita();
+
+                for (let i = 0; i < anillos.length; i++) {
+                    if (estaColision(bola, anillos[i])) {
+                        gameOver = true;
+                        dispararFuegosArtificiales = true;
+                        gameOverX = bola.x; // Guardar la posición de la bola al morir
+                        gameOverY = bola.y;
+                        finalScoreDisplay.textContent = score;
+                        gameOverOverlay.style.display = 'flex';
+                        return;
+                    }
+                }
+            }
+        }
+
+        function dibujarJuego() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            dibujarAnillos();
+            dibujarBolita();
+            actualizarYDibujarParticulas();
+            mostrarInfo();
+            if (dispararFuegosArtificiales) {
+                actualizarYDibujarFuegosArtificiales();
+                dibujarGameOver();
+            }
+        }
+
+        function bucleJuego() {
+            actualizarJuego();
+            dibujarJuego();
+            requestAnimationFrame(bucleJuego);
+        }
+
+
+        inicializarAnillos();
+        bucleJuego();
+
+        // Eventos
+        canvas.addEventListener('mousemove', (e) => {
+            if (!gameOver) {
+                bola.y = e.clientY - canvas.offsetTop;
+                if (bola.y < bola.radio) {
+                    bola.y = bola.radio;
+                }
+                if (bola.y > canvas.height - bola.radio) {
+                    bola.y = canvas.height - bola.radio;
+                }
+            }
+        });
+
+        canvas.addEventListener('click', function(event) {
+            if (!gameOver) {
+                // Calcula la dirección del impulso (opcional: desde el centro hacia el clic)
+                const dx = bola.x - event.clientX;
+                const dy = bola.y - event.clientY;
+                const magnitud = Math.sqrt(dx * dx + dy * dy);
+                const dirX = dx / magnitud;
+                const dirY = dy / magnitud;
+
+                // Aplica el impulso (ajusta la fuerza según lo desees)
+                const fuerzaImpulso = 8;
+                bola.velocidadX += dirX * fuerzaImpulso;
+                bola.velocidadY += dirY * fuerzaImpulso;
+
+                // Inicia el efecto de retorno a la velocidad normal
+                enImpulso = true;
+                tiempoInicioImpulso = Date.now();
+            }
+        });
+
+        restartButton.addEventListener('click', () => {
+            gameOverOverlay.style.display = 'none';
+            gameOver = false;
+            dispararFuegosArtificiales = false;
+            fuegosArtificiales.length = 0;
+            particulas.length = 0;
+            score = 0;
+            tiempoTranscurrido = 0;
+            bola.x = 100;
+            bola.y = canvas.height / 2;
+            bola.velocidadX = 5;
+            bola.velocidadY = 5;
+            inicializarAnillos();
+            bucleJuego();
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bolita con Anillos Giratorios que se Encojen</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column; /* Organiza elementos verticalmente */
+            align-items: center; /* Centra horizontalmente */
+            justify-content: center; /* Centra verticalmente */
+            min-height: 100vh; /* Ocupa el 100% de la altura de la ventana */
+            background: black;
+        }
+        canvas {
+            display: block;
+            background: black;
+            border: 2px solid lime; /* Borde para el canvas */
+            border-radius: 10px; /* Bordes redondeados */
+            box-shadow: 0 0 20px lime; /* Sombra brillante */
+            flex-shrink: 0; /* Evita que el canvas se encoja */
+        }
+        .controls {
+            margin-top: 20px;
+            text-align: center;
+        }
+        button {
+            background-color: #33FF57; /* Verde lima */
+            color: black;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px; /* Bordes redondeados */
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            transition: background-color 0.3s ease, transform 0.1s ease;
+            font-family: 'Inter', sans-serif; /* Fuente consistente */
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #2ECC40; /* Verde más oscuro al pasar el ratón */
+            transform: translateY(-2px);
+        }
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        .message-box {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid lime;
+            z-index: 1000;
+            text-align: center;
+            display: none; /* Oculto por defecto */
+        }
+        .message-box button {
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="gameCanvas"></canvas>
+
+<div class="controls">
+    <button id="motionControlButton" style="display:none;">Activar Control por Movimiento</button>
+</div>
+
+<div id="messageBox" class="message-box">
+    <p id="messageText"></p>
+    <button id="messageBoxButton">OK</button>
+</div>
+
+<script>
+// Referencia al elemento canvas y su contexto de dibujo
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+// Dimensiones actuales del canvas
+let ancho = window.innerWidth;
+let alto = window.innerHeight;
+
+// Dimensiones de referencia para el escalado de los elementos del juego.
+// El juego fue diseñado originalmente para una dimensión de 800px.
+// Todos los tamaños y velocidades se escalarán en proporción a esta referencia.
+const REFERENCE_DIMENSION = 800;
+let scaleFactor = 1; // Factor de escalado actual
+
+// Valores base de los parámetros del juego (para la dimensión de referencia)
+const BASE_RADIO_BOLITA = 10;
+const BASE_GRAVEDAD = 0.05;
+const BASE_VELOCIDAD_ROTACION_ANILLOS = 0.01;
+const BASE_VELOCIDAD_ENCOGIMIENTO = 0.05;
+const BASE_RADIO_MINIMO = 20;
+const BASE_ANCHO_LINEA_ANILLO = 5;
+const BASE_VELOCIDAD_BOLITA_MAX = 3;
+
+// Variables para los parámetros del juego, que se actualizarán con el escalado
+let radioBolita;
+let gravedad;
+let velocidadRotacionAnillos;
+let velocidadEncogimiento;
+let radioMinimo;
+let anchoLineaAnillo;
+let velocidadBolitaMax;
+
+// Variables dinámicas para el tamaño de los anillos, calculadas en cada redimensión
+let separacionAnillos;
+let radioInicialAnillo;
+
+// Posición y velocidad de la bolita
+let bolitaX;
+let bolitaY;
+let velocidadBolitaX;
+let velocidadBolitaY;
+
+// Arreglo para almacenar los anillos
+let anillos = [];
+let numeroAnillosIniciales = 12; // Número de anillos al inicio
+const longitudArco = Math.PI * 1.5; // La longitud del arco de los anillos (3/4 de círculo)
+
+// Sistema de partículas para efectos de desintegración
+let particulas = [];
+const NUM_PARTICULAS_POR_ANILLO = 300; // Corrected constant name
+const DURACION_PARTICULAS = 60; // Duración de las partículas en frames
+
+// Sistema de rastro para la bolita
+let rastro = [];
+const MAX_PUNTOS_RASTRO = 20;
+const DURACION_RASTRO = 15; // Duración de cada punto del rastro en frames
+
+// Registro de colisiones para evitar rebotes múltiples
+let ultimaColision = {
+    anilloId: -1,
+    tiempo: 0
+};
+
+// Control del estado del juego
+let juegoActivo = true;
+let dispararFuegosArtificiales = false;
+let fuegosArtificiales = []; // Array para almacenar los fuegos artificiales activos
+let gameOverX = 0; // Posición de la bolita cuando el juego termina
+let gameOverY = 0;
+
+// Variables para el control por movimiento
+let motionControlActive = false;
+let motionControlSensitivity = 0.1; // Ajusta la sensibilidad del movimiento
+
+// Variable para almacenar el factor de escalado anterior, útil para ajustar elementos existentes
+let oldScaleFactor = 1;
+
+// Elementos del DOM para la interfaz de usuario
+const motionControlButton = document.getElementById('motionControlButton');
+const messageBox = document.getElementById('messageBox');
+const messageText = document.getElementById('messageText');
+const messageBoxButton = document.getElementById('messageBoxButton');
+
+// Función para mostrar un mensaje en una caja de diálogo personalizada
+function showMessage(message, buttonText = "OK", callback = null) {
+    messageText.textContent = message;
+    messageBoxButton.textContent = buttonText;
+    messageBox.style.display = 'block'; // Mostrar la caja de mensaje
+
+    // Eliminar listener anterior para evitar duplicados
+    messageBoxButton.onclick = null;
+    messageBoxButton.onclick = () => {
+        messageBox.style.display = 'none'; // Ocultar la caja de mensaje
+        if (callback) {
+            callback(); // Ejecutar el callback si existe
+        }
+    };
+}
+
+
+// Función para actualizar todos los parámetros del juego según el factor de escalado
+function updateScaledParameters() {
+    // El factor de escalado se basa en la dimensión más pequeña de la ventana para asegurar visibilidad en cualquier orientación
+    scaleFactor = Math.min(ancho, alto) / REFERENCE_DIMENSION;
+
+    // Aplicar el factor de escalado a todos los parámetros del juego
+    radioBolita = BASE_RADIO_BOLITA * scaleFactor;
+    gravedad = BASE_GRAVEDAD * scaleFactor;
+    velocidadRotacionAnillos = BASE_VELOCIDAD_ROTACION_ANILLOS; // Mantener la velocidad de rotación sin un escalado lineal fuerte
+    velocidadEncogimiento = BASE_VELOCIDAD_ENCOGIMIENTO * scaleFactor;
+    radioMinimo = BASE_RADIO_MINIMO * scaleFactor;
+    anchoLineaAnillo = BASE_ANCHO_LINEA_ANILLO * scaleFactor;
+    velocidadBolitaMax = BASE_VELOCIDAD_BOLITA_MAX * scaleFactor;
+
+    // Si el juego está activo, intentar ajustar la posición y velocidad de la bolita para evitar que se salga
+    if (juegoActivo) {
+        bolitaX = Math.max(radioBolita, Math.min(bolitaX, ancho - radioBolita));
+        bolitaY = Math.max(radioBolita, Math.min(bolitaY, alto - radioBolita));
+        velocidadBolitaX *= (scaleFactor / (oldScaleFactor || 1)); // Ajustar velocidad actual por el cambio de escala
+        velocidadBolitaY *= (scaleFactor / (oldScaleFactor || 1));
+    }
+
+    // Calcular las dimensiones de los anillos dinámicamente para que siempre quepan en la pantalla
+    const usableCanvasRadius = Math.min(ancho, alto) / 2;
+    const marginRatio = 0.9; // Usar el 90% del radio disponible para los anillos, dejando un margen
+    const targetMaxRingRadius = usableCanvasRadius * marginRatio;
+
+    // El anillo más interno debe ser lo suficientemente grande para que la bolita pase
+    const minimumInnerRingRadius = radioBolita * 2.5; // 2.5 veces el radio de la bolita
+
+    // Calcular el espacio total que ocuparán los anillos
+    const totalSpanForRings = targetMaxRingRadius - minimumInnerRingRadius;
+
+    // Calcular la separación entre anillos, asegurando que todos los anillos iniciales quepan
+    if (numeroAnillosIniciales > 1) {
+        separacionAnillos = totalSpanForRings / (numeroAnillosIniciales - 1);
+        if (separacionAnillos < 0) separacionAnillos = 0; // Evitar separación negativa
+    } else {
+        separacionAnillos = 0; // Si solo hay un anillo, la separación no es relevante
+    }
+
+    // El radio inicial del anillo es el mínimo calculado
+    radioInicialAnillo = minimumInnerRingRadius;
+
+    // Re-escalar y re-posicionar los anillos existentes según los nuevos valores dinámicos
+    for (let i = 0; i < anillos.length; i++) {
+        let anillo = anillos[i];
+        anillo.radio = radioInicialAnillo + i * separacionAnillos;
+        anillo.radioOriginal = anillo.radio; // Actualizar el radio original para consistencia
+        anillo.anchoLinea = anchoLineaAnillo; // Actualizar el ancho de línea
+    }
+    oldScaleFactor = scaleFactor; // Guardar el factor de escalado actual para la próxima redimensión
+}
+
+// Función para redimensionar el canvas y actualizar los parámetros escalados
+function redimensionarCanvas() {
+    ancho = window.innerWidth;
+    alto = window.innerHeight;
+    canvas.width = ancho;
+    canvas.height = alto;
+    updateScaledParameters(); // Actualizar todos los parámetros escalados con las nuevas dimensiones
+}
+// Listener para el evento de redimensionamiento de la ventana
+window.addEventListener('resize', redimensionarCanvas);
+
+// Función para crear un nuevo anillo
+function crearAnillo(indice) {
+    // El radio se calcula utilizando el radioInicialAnillo y separacionAnillos que se escalan dinámicamente
+    let radio = radioInicialAnillo + indice * separacionAnillos;
+
+    // El ángulo inicial para la posición del arco es relativo al índice del anillo
+    const anguloInicio = (Math.PI * 2 / numeroAnillosIniciales) * indice;
+
+    // Colores predefinidos para los anillos
+    const colores = [
+        '#FF5733', '#33FF57', '#3357FF', '#FF33A8', '#33FFF5', '#F5FF33',
+        '#A833FF', '#FF8C33', '#33FF8C', '#8C33FF', '#FF3333', '#33FFFF'
+    ];
+    const colorAnillo = colores[indice % colores.length];
+
+    anillos.push({
+        id: indice,
+        x: ancho / 2,
+        y: alto / 2,
+        radio: radio,
+        radioOriginal: radio,
+        color: colorAnillo,
+        anchoLinea: anchoLineaAnillo,
+        anguloInicio: anguloInicio,
+        anguloFin: anguloInicio + longitudArco,
+        eliminado: false,
+        rotacion: Math.random() * Math.PI * 2,
+        cruzado: false,
+        interior: false,
+        tiempoCreacion: Date.now()
+    });
+}
+
+// Función para inicializar todos los anillos al inicio del juego
+function inicializarAnillos() {
+    for (let i = 0; i < numeroAnillosIniciales; i++) {
+        crearAnillo(i);
+    }
+}
+
+// Función para inicializar la posición y velocidad de la bolita
+function inicializarBolita() {
+    bolitaX = ancho / 2;
+    bolitaY = alto / 2;
+    // Velocidad inicial aleatoria dentro del rango escalado
+    velocidadBolitaX = (Math.random() * 2 - 1) * velocidadBolitaMax;
+    velocidadBolitaY = (Math.random() * 2 - 1) * velocidadBolitaMax;
+
+    // Asegurarse de que la velocidad no sea demasiado pequeña para evitar que se quede quieta
+    if (Math.abs(velocidadBolitaX) < velocidadBolitaMax * 0.5) velocidadBolitaX = (velocidadBolitaX > 0 ? 1 : -1) * velocidadBolitaMax * 0.5;
+    if (Math.abs(velocidadBolitaY) < velocidadBolitaMax * 0.5) velocidadBolitaY = (velocidadBolitaY > 0 ? 1 : -1) * velocidadBolitaMax * 0.5;
+}
+
+// Actualiza el estado de los anillos (rotación, encogimiento, eliminación)
+function actualizarAnillos() {
+    for (let i = 0; i < anillos.length; i++) {
+        let anillo = anillos[i];
+
+        if (!anillo.eliminado) {
+            anillo.rotacion += velocidadRotacionAnillos;
+            anillo.radio -= velocidadEncogimiento;
+
+            if (anillo.radio <= radioMinimo) {
+                crearParticulasDesintegracion(anillo);
+                anillo.eliminado = true;
+                anillos.splice(i, 1);
+                i--;
+
+                crearAnillo(numeroAnillosIniciales);
+                numeroAnillosIniciales++;
+            }
+        }
+    }
+
+    if (anillos.length === 0 && juegoActivo) {
+        juegoActivo = false;
+        dispararFuegosArtificiales = true;
+        gameOverX = bolitaX;
+        gameOverY = bolitaY;
+    }
+}
+
+// Dibuja los anillos en el canvas
+function dibujarAnillos() {
+    for (let anillo of anillos) {
+        if (!anillo.eliminado) {
+            ctx.beginPath();
+            ctx.arc(
+                anillo.x, anillo.y, anillo.radio,
+                anillo.anguloInicio + anillo.rotacion,
+                anillo.anguloFin + anillo.rotacion
+            );
+            ctx.lineWidth = anillo.anchoLinea;
+            ctx.strokeStyle = anillo.color;
+            ctx.stroke();
+        }
+    }
+}
+
+// Función auxiliar para verificar si un ángulo está dentro de un arco
+function estaDentroDelArco(anguloBolita, anguloInicio, anguloFin) {
+    const ang = (anguloBolita + 2 * Math.PI) % (2 * Math.PI);
+    const inicio = (anguloInicio + 2 * Math.PI) % (2 * Math.PI);
+    const fin = (anguloFin + 2 * Math.PI) % (2 * Math.PI);
+
+    if (inicio < fin) {
+        return ang >= inicio && ang <= fin;
+    } else {
+        return ang >= inicio || ang <= fin;
+    }
+}
+
+// Actualiza la posición de la bolita y maneja las colisiones
+function actualizarBolita() {
+    rastro.push({
+        x: bolitaX,
+        y: bolitaY,
+        vida: DURACION_RASTRO
+    });
+
+    if (rastro.length > MAX_PUNTOS_RASTRO) {
+        rastro.shift();
+    }
+
+    // Solo aplicar gravedad si el control por movimiento no está activo
+    // La aceleración del dispositivo ya incluye la gravedad
+    if (!motionControlActive) {
+        bolitaX += velocidadBolitaX;
+        bolitaY += velocidadBolitaY;
+        velocidadBolitaY += gravedad;
+    } else {
+        // Si el control por movimiento está activo, la velocidad ya se actualiza en handleMotion
+        bolitaX += velocidadBolitaX;
+        bolitaY += velocidadBolitaY;
+    }
+
+
+    // Comprobar colisiones con anillos
+    for (let i = 0; i < anillos.length; i++) {
+        let anillo = anillos[i];
+        if (anillo.eliminado) continue;
+
+        const dx = bolitaX - anillo.x;
+        const dy = bolitaY - anillo.y;
+        const distancia = Math.sqrt(dx * dx + dy * dy);
+        const anguloBolita = Math.atan2(dy, dx);
+
+        const anguloInicio = anillo.anguloInicio + anillo.rotacion;
+        const anguloFin = anillo.anguloFin + anillo.rotacion;
+
+        const dentroDelArco = estaDentroDelArco(anguloBolita, anguloInicio, anguloFin);
+
+        const margen = radioBolita + anillo.anchoLinea / 2;
+        const distanciaAlBorde = Math.abs(distancia - anillo.radio);
+
+        const ahora = Date.now();
+        const cooldownColision = 100;
+        const puedeColisionar = (ultimaColision.anilloId !== anillo.id) ||
+                                 (ahora - ultimaColision.tiempo > cooldownColision);
+
+        if (distanciaAlBorde < margen) {
+            if (dentroDelArco && puedeColisionar) {
+                const normalX = dx / distancia;
+                const normalY = dy / distancia;
+
+                const dot = velocidadBolitaX * normalX + velocidadBolitaY * normalY;
+                velocidadBolitaX -= 2 * dot * normalX;
+                velocidadBolitaY -= 2 * dot * normalY;
+
+                const ajuste = margen - distanciaAlBorde + 1;
+                if (distancia < anillo.radio) {
+                    bolitaX -= normalX * ajuste;
+                    bolitaY -= normalY * ajuste;
+                } else {
+                    bolitaX += normalX * ajuste;
+                    bolitaY += normalY * ajuste;
+                }
+
+                ultimaColision = {
+                    anilloId: anillo.id,
+                    tiempo: ahora
+                };
+            }
+
+            if (!anillo.cruzado) {
+                anillo.cruzado = true;
+                anillo.interior = (distancia < anillo.radio);
+            }
+        }
+
+        if (anillo.cruzado &&
+            ((anillo.interior && distancia > anillo.radio + margen) ||
+             (!anillo.interior && distancia < anillo.radio - margen)) &&
+            !dentroDelArco) {
+            crearParticulasDesintegracion(anillo);
+            anillo.eliminado = true;
+            anillos.splice(i, 1);
+            i--;
+        }
+    }
+
+    // Rebote en bordes de la pantalla
+    if (bolitaX + radioBolita > ancho) {
+        bolitaX = ancho - radioBolita;
+        velocidadBolitaX *= -1;
+    }
+    if (bolitaX - radioBolita < 0) {
+        bolitaX = radioBolita;
+        velocidadBolitaX *= -1;
+    }
+    if (bolitaY + radioBolita > alto) {
+        bolitaY = alto - radioBolita;
+        velocidadBolitaY *= -1;
+    }
+    if (bolitaY - radioBolita < 0) {
+        bolitaY = radioBolita;
+        velocidadBolitaY *= -1;
+    }
+}
+
+// Dibuja la bolita y su rastro
+function dibujarBolita() {
+    for (let i = 0; i < rastro.length; i++) {
+        const punto = rastro[i];
+        punto.vida--;
+
+        const opacidad = punto.vida / DURACION_RASTRO;
+        const tamano = radioBolita * 0.7 * opacidad;
+
+        ctx.beginPath();
+        ctx.arc(punto.x, punto.y, tamano, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(0, 255, 0, ${opacidad * 0.7})`;
+        ctx.fill();
+
+        if (punto.vida <= 0) {
+            rastro.splice(i, 1);
+            i--;
+        }
+    }
+
+    ctx.beginPath();
+    ctx.arc(bolitaX, bolitaY, radioBolita, 0, Math.PI * 2);
+    ctx.fillStyle = 'lime';
+    ctx.fill();
+}
+
+// Crea partículas para el efecto de desintegración de los anillos
+function crearParticulasDesintegracion(anillo) {
+    const anguloTotal = Math.PI * 2;
+    for (let i = 0; i < NUM_PARTICULAS_POR_ANILLO; i++) { // Corrected constant name here
+        const distanciaRadio = anillo.radio + (Math.random() * 10 - 5) * scaleFactor;
+        const angulo = (i / NUM_PARTICULAS_POR_ANILLO) * anguloTotal; // Corrected constant name here
+        const x = anillo.x + Math.cos(angulo) * distanciaRadio;
+        const y = anillo.y + Math.sin(angulo) * distanciaRadio;
+
+        const velocidadBase = (Math.random() * 3 + 1) * scaleFactor;
+        const velocidadX = Math.cos(angulo) * velocidadBase;
+        const velocidadY = Math.sin(angulo) * velocidadBase;
+
+        const tamano = (Math.random() * 4 + 1) * scaleFactor;
+
+        particulas.push({
+            x: x,
+            y: y,
+            velocidadX: velocidadX,
+            velocidadY: velocidadY,
+            color: anillo.color,
+            tamano: tamano,
+            vida: DURACION_PARTICULAS * (0.7 + Math.random() * 0.6),
+            opacidad: 1.0
+        });
+    }
+}
+
+// Actualiza y dibuja las partículas de desintegración
+function actualizarYDibujarParticulas() {
+    for (let i = particulas.length - 1; i >= 0; i--) {
+        const p = particulas[i];
+
+        p.x += p.velocidadX;
+        p.y += p.velocidadY;
+
+        p.vida--;
+        p.opacidad = p.vida / DURACION_PARTICULAS;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.tamano, 0, Math.PI * 2);
+        ctx.fillStyle = p.color + Math.floor(p.opacidad * 255).toString(16).padStart(2, '0');
+        ctx.fill();
+
+        if (p.vida <= 0) {
+            particulas.splice(i, 1);
+        }
+    }
+}
+
+// Crea un efecto de fuego artificial en una posición dada
+function crearFuegoArtificial(x, y) {
+    const numParticulas = 100;
+    const colores = ['#FF0000', '#FFFF00', '#00FF00', '#00FFFF', '#0000FF', '#FF00FF'];
+
+    for (let i = 0; i < numParticulas; i++) {
+        const angulo = Math.random() * Math.PI * 2;
+        const velocidad = (Math.random() * 5 + 2) * scaleFactor;
+
+        fuegosArtificiales.push({
+            x: x,
+            y: y,
+            velocidadX: Math.cos(angulo) * velocidad,
+            velocidadY: Math.sin(angulo) * velocidad,
+            color: colores[Math.floor(Math.random() * colores.length)],
+            tamano: (Math.random() * 4 + 2) * scaleFactor,
+            vida: Math.floor(Math.random() * 60 + 60),
+            opacidad: 1
+        });
+    }
+}
+
+// Actualiza y dibuja las partículas de los fuegos artificiales
+function actualizarYDibujarFuegosArtificiales() {
+    for (let i = fuegosArtificiales.length - 1; i >= 0; i--) {
+        const fuego = fuegosArtificiales[i];
+
+        fuego.x += fuego.velocidadX;
+        fuego.y += fuego.velocidadY;
+        fuego.y += 0.05 * scaleFactor;
+
+        fuego.vida--;
+        fuego.opacidad = fuego.vida / 60;
+
+        ctx.beginPath();
+        ctx.arc(fuego.x, fuego.y, fuego.tamano, 0, Math.PI * 2);
+        ctx.fillStyle = fuego.color;
+        ctx.globalAlpha = Math.max(0, fuego.opacidad);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        if (fuego.vida <= 0) {
+            fuegosArtificiales.splice(i, 1);
+        }
+    }
+}
+
+// Información en pantalla (anillos restantes, tiempo)
+let tiempoUltimoFrame = Date.now();
+function mostrarInfo() {
+    ctx.fillStyle = "white";
+    ctx.font = `${14 * scaleFactor}px Arial`;
+
+    ctx.fillText(`Anillos: ${anillos.length}`, 10 * scaleFactor, 20 * scaleFactor);
+    const tiempoTotal = Math.floor((Date.now() - tiempoUltimoFrame) / 1000);
+    ctx.fillText(`Tiempo: ${tiempoTotal}s`, 10 * scaleFactor, 40 * scaleFactor);
+    // Mostrar estado del control por movimiento
+    ctx.fillText(`Control Movimiento: ${motionControlActive ? 'Activado' : 'Desactivado'}`, 10 * scaleFactor, 60 * scaleFactor);
+}
+
+// Mensaje de "Game Over"
+function dibujarGameOver() {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    ctx.fillRect(0, alto / 2 - (30 * scaleFactor), ancho, 60 * scaleFactor);
+    ctx.fillStyle = "white";
+    ctx.font = `${24 * scaleFactor}px Arial`;
+    ctx.textAlign = "center";
+    ctx.fillText("¡Game Over!", ancho / 2, alto / 2 + (10 * scaleFactor));
+    ctx.textAlign = "start";
+}
+
+// Función para reiniciar el juego
+function reiniciarJuego() {
+    if (!juegoActivo) {
+        anillos = [];
+        particulas = [];
+        rastro = [];
+        numeroAnillosIniciales = 12;
+
+        updateScaledParameters();
+        inicializarAnillos();
+        inicializarBolita();
+
+        juegoActivo = true;
+        dispararFuegosArtificiales = false;
+        fuegosArtificiales = [];
+        tiempoUltimoFrame = Date.now();
+        // Al reiniciar, si el control por movimiento estaba activo, se mantiene activo
+        // Si no, se queda en el control por clic
+    }
+}
+
+// Manejador del evento devicemotion
+function handleMotion(event) {
+    if (!juegoActivo || !motionControlActive) return;
+
+    // Obtener la aceleración incluyendo la gravedad
+    // alpha, beta, gamma representan la orientación (rotación)
+    // accelerationIncludingGravity.x/y/z son las fuerzas que el dispositivo detecta, incluyendo la gravedad
+    const ax = event.accelerationIncludingGravity.x;
+    const ay = event.accelerationIncludingGravity.y;
+
+    // Ajustar las velocidades de la bolita basadas en la inclinación del dispositivo
+    // El eje Y del acelerómetro suele estar invertido respecto al eje Y del canvas
+    velocidadBolitaX += ax * motionControlSensitivity * scaleFactor;
+    velocidadBolitaY += -ay * motionControlSensitivity * scaleFactor; // Multiplicar por -1 para invertir el eje Y
+}
+
+// Función para determinar si es un dispositivo móvil (para mostrar el botón de control por movimiento)
+function isMobileDevice() {
+    const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+    return /android|iphone|ipad|ipod|blackberry|windows phone/i.test(userAgent);
+}
+
+// Función para solicitar permisos de DeviceMotion (especialmente para iOS 13+)
+function requestMotionPermission() {
+    if (typeof DeviceMotionEvent.requestPermission === 'function') {
+        DeviceMotionEvent.requestPermission()
+            .then(permissionState => {
+                if (permissionState === 'granted') {
+                    window.addEventListener('devicemotion', handleMotion);
+                    motionControlActive = true;
+                    motionControlButton.textContent = "Control por Movimiento: ACTIVADO";
+                    showMessage("¡Control por movimiento activado! Inclina tu dispositivo para mover la bolita.", "Entendido");
+                } else {
+                    motionControlActive = false;
+                    motionControlButton.textContent = "Control por Movimiento: DENEGADO";
+                    showMessage("Permiso de movimiento denegado. No se puede usar el control por movimiento. Puedes usar el click para dar impulso.", "OK");
+                }
+            })
+            .catch(error => {
+                console.error("Error al solicitar permiso de DeviceMotion:", error);
+                motionControlActive = false;
+                motionControlButton.textContent = "Control por Movimiento: ERROR";
+                showMessage("Ocurrió un error al solicitar permiso de movimiento. " + error.message, "Cerrar");
+            });
+    } else {
+        // Para navegadores que no requieren permiso explícito (Chrome en Android, Firefox, etc.)
+        window.addEventListener('devicemotion', handleMotion);
+        motionControlActive = true;
+        motionControlButton.textContent = "Control por Movimiento: ACTIVADO";
+        showMessage("Control por movimiento activado. Inclina tu dispositivo para mover la bolita.", "Entendido");
+    }
+}
+
+// Manejo de eventos de clic en el canvas
+canvas.addEventListener('click', function(event) {
+    if (juegoActivo) {
+        if (!motionControlActive) { // Solo si el control por movimiento NO está activo
+            const mouseX = event.clientX - canvas.getBoundingClientRect().left;
+            const mouseY = event.clientY - canvas.getBoundingClientRect().top;
+
+            const direccionX = bolitaX - mouseX;
+            const direccionY = bolitaY - mouseY;
+            const magnitud = Math.sqrt(direccionX * direccionX + direccionY * direccionY);
+            const normalX = direccionX / magnitud;
+            const normalY = direccionY / magnitud;
+
+            const fuerzaImpulso = 5 * scaleFactor;
+            velocidadBolitaX += normalX * fuerzaImpulso;
+            velocidadBolitaY += normalY * fuerzaImpulso;
+        } else {
+            // Si el control por movimiento está activo, un clic no hace nada (o podría pausar, etc.)
+            // Por ahora, no hace nada para evitar interrupciones.
+            // showMessage("El control por movimiento está activo. El click está deshabilitado.", "OK");
+        }
+    } else if (dispararFuegosArtificiales) {
+        // Crear fuegos artificiales en la posición del clic después del Game Over
+        crearFuegoArtificial(event.clientX, event.clientY);
+    } else {
+        reiniciarJuego(); // Reiniciar el juego si no está activo
+    }
+});
+
+// Listener para el botón de control por movimiento
+motionControlButton.addEventListener('click', () => {
+    if (!motionControlActive) {
+        requestMotionPermission();
+    } else {
+        // Desactivar el control por movimiento
+        window.removeEventListener('devicemotion', handleMotion);
+        motionControlActive = false;
+        motionControlButton.textContent = "Activar Control por Movimiento";
+        showMessage("Control por movimiento desactivado. Ahora puedes usar el click para dar impulso a la bolita.", "OK");
+    }
+});
+
+// Bucle principal del juego
+function bucleJuego() {
+    ctx.clearRect(0, 0, ancho, alto);
+
+    actualizarYDibujarParticulas();
+    actualizarYDibujarFuegosArtificiales();
+
+    if (juegoActivo) {
+        actualizarAnillos();
+        dibujarAnillos();
+        actualizarBolita();
+        dibujarBolita();
+        mostrarInfo();
+    } else {
+        dibujarGameOver();
+        if (dispararFuegosArtificiales && fuegosArtificiales.length === 0) {
+            crearFuegoArtificial(gameOverX, gameOverY);
+        }
+    }
+
+    requestAnimationFrame(bucleJuego);
+}
+
+// Inicialización: se llama una vez al cargar la página
+window.onload = function() {
+    redimensionarCanvas(); // Establecer dimensiones iniciales y escalar parámetros
+    inicializarAnillos();
+    inicializarBolita();
+
+    // Mostrar el botón de control por movimiento solo en dispositivos móviles
+    if (isMobileDevice()) {
+        motionControlButton.style.display = 'block';
+    }
+
+    bucleJuego(); // Iniciar el bucle del juego
+};
+</script>
+
+</body>
+</html>
