@@ -5,11 +5,11 @@
     <style>
         body {
             margin: 0;
-            overflow: hidden;
+            overflow: hidden; /* Esto oculta barras de desplazamiento si el contenido excede el viewport */
             display: flex;
             flex-direction: column; /* Organiza elementos verticalmente */
             align-items: center; /* Centra horizontalmente */
-            justify-content: center; /* Centra verticalmente */
+            justify-content: space-around; /* Distribuye el espacio verticalmente entre los elementos */
             min-height: 100vh; /* Ocupa el 100% de la altura de la ventana */
             background: black;
         }
@@ -20,6 +20,10 @@
             border-radius: 10px; /* Bordes redondeados */
             box-shadow: 0 0 20px lime; /* Sombra brillante */
             flex-shrink: 0; /* Evita que el canvas se encoja */
+            width: 95vw; /* Ocupa el 95% del ancho del viewport */
+            max-width: 800px; /* Limita el ancho máximo para pantallas grandes */
+            height: auto; /* Mantiene la relación de aspecto */
+            max-height: 80vh; /* Limita la altura máxima para dejar espacio al botón */
         }
         .controls {
             margin-top: 20px;
@@ -128,7 +132,7 @@ const longitudArco = Math.PI * 1.5; // La longitud del arco de los anillos (3/4 
 
 // Sistema de partículas para efectos de desintegración
 let particulas = [];
-const NUM_PARTICULAS_POR_ANILLO = 300; // Corrected constant name
+const NUM_PARTICULAS_POR_ANILLO = 300;
 const DURACION_PARTICULAS = 60; // Duración de las partículas en frames
 
 // Sistema de rastro para la bolita
@@ -493,9 +497,9 @@ function dibujarBolita() {
 // Crea partículas para el efecto de desintegración de los anillos
 function crearParticulasDesintegracion(anillo) {
     const anguloTotal = Math.PI * 2;
-    for (let i = 0; i < NUM_PARTICULAS_POR_ANILLO; i++) { // Corrected constant name here
+    for (let i = 0; i < NUM_PARTICULAS_POR_ANILLO; i++) {
         const distanciaRadio = anillo.radio + (Math.random() * 10 - 5) * scaleFactor;
-        const angulo = (i / NUM_PARTICULAS_POR_ANILLO) * anguloTotal; // Corrected constant name here
+        const angulo = (i / NUM_PARTICULAS_POR_ANILLO) * anguloTotal;
         const x = anillo.x + Math.cos(angulo) * distanciaRadio;
         const y = anillo.y + Math.sin(angulo) * distanciaRadio;
 
