@@ -91,6 +91,23 @@
             padding: 20px 40px; /* Much larger touch target */
             font-size: 20px;
         }
+        #inGameRestartButton {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 10px 15px;
+            font-size: 14px;
+            border: 1px solid white;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1500;
+            font-family: 'Inter', sans-serif;
+        }
+        #inGameRestartButton:hover {
+            background-color: rgba(255, 255, 255, 0.4);
+        }
     </style>
 </head>
 <body>
@@ -102,6 +119,7 @@
 </div>
 
 <button id="restartButton">Volver a jugar</button>
+<button id="inGameRestartButton">Reiniciar</button>
 
 <div id="messageBox" class="message-box">
     <p id="messageText"></p>
@@ -189,6 +207,7 @@ let oldScaleFactor = 1;
 // Elementos del DOM para la interfaz de usuario
 const motionControlButton = document.getElementById('motionControlButton');
 const restartButton = document.getElementById('restartButton');
+const inGameRestartButton = document.getElementById('inGameRestartButton');
 const messageBox = document.getElementById('messageBox');
 const messageText = document.getElementById('messageText');
 const messageBoxButton = document.getElementById('messageBoxButton');
@@ -355,6 +374,7 @@ function actualizarAnillos() {
         gameOverX = bolitaX;
         gameOverY = bolitaY;
         restartButton.style.display = 'block'; // Mostrar botón de reinicio
+        inGameRestartButton.style.display = 'none'; // Ocultar botón de reinicio en juego
     }
 }
 
@@ -647,24 +667,24 @@ function dibujarGameOver() {
 
 // Función para reiniciar el juego
 function reiniciarJuego() {
-    if (!juegoActivo) {
-        anillos = [];
-        particulas = [];
-        rastro = [];
-        numeroAnillosIniciales = 12;
+    // Reiniciar el juego independientemente del estado actual
+    anillos = [];
+    particulas = [];
+    rastro = [];
+    numeroAnillosIniciales = 12;
 
-        updateScaledParameters();
-        inicializarAnillos();
-        inicializarBolita();
+    updateScaledParameters();
+    inicializarAnillos();
+    inicializarBolita();
 
-        juegoActivo = true;
-        dispararFuegosArtificiales = false;
-        fuegosArtificiales = [];
-        tiempoUltimoFrame = Date.now();
-        restartButton.style.display = 'none'; // Ocultar botón de reinicio
-        // Al reiniciar, si el control por movimiento estaba activo, se mantiene activo
-        // Si no, se queda en el control por clic
-    }
+    juegoActivo = true;
+    dispararFuegosArtificiales = false;
+    fuegosArtificiales = [];
+    tiempoUltimoFrame = Date.now();
+    restartButton.style.display = 'none'; // Ocultar botón de reinicio
+    inGameRestartButton.style.display = 'block'; // Mostrar botón de reinicio en juego
+    // Al reiniciar, si el control por movimiento estaba activo, se mantiene activo
+    // Si no, se queda en el control por clic
 }
 
 // Manejador del evento devicemotion
@@ -779,6 +799,7 @@ canvas.addEventListener('click', function(event) {
 
 // Listener para el botón de reinicio
 restartButton.addEventListener('click', reiniciarJuego);
+inGameRestartButton.addEventListener('click', reiniciarJuego);
 
 // Listener para el botón de control por movimiento
 motionControlButton.addEventListener('click', () => {
