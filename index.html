@@ -373,11 +373,7 @@ function actualizarBolita() {
     // Aplicar velocidad siempre
     bolitaX += velocidadBolitaX;
     bolitaY += velocidadBolitaY;
-
-    // Solo aplicar gravedad si el control por movimiento NO está activo
-    if (!motionControlActive) {
-        velocidadBolitaY += gravedad;
-    }
+    velocidadBolitaY += gravedad; // Gravedad siempre activa para que caiga al suelo
 
 
     // Comprobar colisiones con anillos
@@ -455,7 +451,16 @@ function actualizarBolita() {
     }
     if (bolitaY + radioBolita > alto) {
         bolitaY = alto - radioBolita;
-        velocidadBolitaY *= -1;
+        // Amortiguar el rebote para que no bote eternamente (0.3 = pierde 70% de energía)
+        velocidadBolitaY *= -0.3;
+        
+        // Si la velocidad es muy baja, detenerla para evitar micro-rebotes
+        if (Math.abs(velocidadBolitaY) < 1 * scaleFactor) {
+            velocidadBolitaY = 0;
+        }
+        
+        // Fricción en el suelo para el movimiento horizontal
+        velocidadBolitaX *= 0.95;
     }
     if (bolitaY - radioBolita < 0) {
         bolitaY = radioBolita;
@@ -642,11 +647,11 @@ function handleMotion(event) {
     const ay = event.accelerationIncludingGravity.y;
 
     // Ajustar las velocidades de la bolita basadas en la inclinación del dispositivo
-    // Invertimos el eje X para que se sienta más natural (según feedback)
+    // Invertimos el eje X para que se sienta más natural
     velocidadBolitaX -= ax * motionControlSensitivity * scaleFactor;
     
-    // Eje Y: Habilitado de nuevo, pero invertido para que inclinar hacia adelante (arriba) suba la bolita
-    velocidadBolitaY += ay * motionControlSensitivity * scaleFactor;
+    // Eje Y: Desactivado para el control por movimiento. La altura se controla con saltos (clicks) y gravedad.
+    // velocidadBolitaY += ay * motionControlSensitivity * scaleFactor;
 }
 
 // Función para determinar si es un dispositivo móvil (para mostrar el botón de control por movimiento)
