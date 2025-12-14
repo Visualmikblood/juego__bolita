@@ -6,28 +6,23 @@
         body {
             margin: 0;
             overflow: hidden; /* Esto oculta barras de desplazamiento si el contenido excede el viewport */
-            display: flex;
-            flex-direction: column; /* Organiza elementos verticalmente */
-            align-items: center; /* Centra horizontalmente */
-            justify-content: space-around; /* Distribuye el espacio verticalmente entre los elementos */
-            min-height: 100vh; /* Ocupa el 100% de la altura de la ventana */
             background: black;
+            width: 100vw;
+            height: 100vh;
         }
         canvas {
             display: block;
             background: black;
-            border: 2px solid lime; /* Borde para el canvas */
-            border-radius: 10px; /* Bordes redondeados */
-            box-shadow: 0 0 20px lime; /* Sombra brillante */
-            flex-shrink: 0; /* Evita que el canvas se encoja */
-            width: 95vw; /* Ocupa el 95% del ancho del viewport */
-            max-width: 800px; /* Limita el ancho máximo para pantallas grandes */
-            height: auto; /* Mantiene la relación de aspecto */
-            max-height: 80vh; /* Limita la altura máxima para dejar espacio al botón */
+            width: 100vw;
+            height: 100vh;
         }
         .controls {
-            margin-top: 20px;
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
             text-align: center;
+            pointer-events: none; /* Permite clicks a través del contenedor si no es en el botón */
         }
         button {
             background-color: #33FF57; /* Verde lima */
@@ -41,10 +36,13 @@
             transition: background-color 0.3s ease, transform 0.1s ease;
             font-family: 'Inter', sans-serif; /* Fuente consistente */
             font-weight: bold;
+            pointer-events: auto; /* Reactiva los clicks en el botón */
+            opacity: 0.7; /* Un poco transparente para no molestar tanto */
         }
         button:hover {
             background-color: #2ECC40; /* Verde más oscuro al pasar el ratón */
             transform: translateY(-2px);
+            opacity: 1;
         }
         button:active {
             transform: translateY(0);
