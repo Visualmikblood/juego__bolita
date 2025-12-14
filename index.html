@@ -609,7 +609,7 @@ function dibujarGameOver() {
     ctx.fillStyle = "white";
     ctx.font = `${24 * scaleFactor}px Arial`;
     ctx.textAlign = "center";
-    ctx.fillText("¡Game Over!", ancho / 2, alto / 2 + (10 * scaleFactor));
+    ctx.fillText("¡El juego se ha acabado!", ancho / 2, alto / 2 + (10 * scaleFactor));
     ctx.textAlign = "start";
 }
 
@@ -688,21 +688,47 @@ function requestMotionPermission() {
 }
 
 // Manejo de eventos de clic en el canvas
+// Variable para controlar si el siguiente click acelera o desacelera
+let siguienteClickAcelera = true;
+
+// Manejo de eventos de clic en el canvas
 canvas.addEventListener('click', function(event) {
     if (juegoActivo) {
         if (!motionControlActive) { // Solo si el control por movimiento NO está activo
-            const mouseX = event.clientX - canvas.getBoundingClientRect().left;
-            const mouseY = event.clientY - canvas.getBoundingClientRect().top;
+            // Calcular la velocidad actual
+            const velocidadActual = Math.sqrt(velocidadBolitaX * velocidadBolitaX + velocidadBolitaY * velocidadBolitaY);
+            
+            // Si la velocidad es muy baja, dar un impulso aleatorio (para evitar que se quede estancada)
+            if (velocidadActual < 0.1) {
+                 const anguloAleatorio = Math.random() * Math.PI * 2;
+                 const fuerzaImpulso = 5 * scaleFactor;
+                 velocidadBolitaX = Math.cos(anguloAleatorio) * fuerzaImpulso;
+                 velocidadBolitaY = Math.sin(anguloAleatorio) * fuerzaImpulso;
+                 siguienteClickAcelera = false; // El siguiente click desacelerará
+            } else {
+                // Normalizar la dirección actual
+                const dirX = velocidadBolitaX / velocidadActual;
+                const dirY = velocidadBolitaY / velocidadActual;
+                
+                const fuerzaImpulso = 5 * scaleFactor;
 
-            const direccionX = bolitaX - mouseX;
-            const direccionY = bolitaY - mouseY;
-            const magnitud = Math.sqrt(direccionX * direccionX + direccionY * direccionY);
-            const normalX = direccionX / magnitud;
-            const normalY = direccionY / magnitud;
+                if (siguienteClickAcelera) {
+                    // Acelerar
+                    velocidadBolitaX += dirX * fuerzaImpulso;
+                    velocidadBolitaY += dirY * fuerzaImpulso;
+                    siguienteClickAcelera = false; // El siguiente click desacelerará
+                    // Opcional: Mostrar mensaje visual pequeño o cambiar cursor
+                } else {
+                    // Desacelerar
+                    let nuevaVelocidad = velocidadActual - fuerzaImpulso;
+                    // Evitar que se detenga por completo o invierta la dirección bruscamente
+                    if (nuevaVelocidad < 2 * scaleFactor) nuevaVelocidad = 2 * scaleFactor; 
 
-            const fuerzaImpulso = 5 * scaleFactor;
-            velocidadBolitaX += normalX * fuerzaImpulso;
-            velocidadBolitaY += normalY * fuerzaImpulso;
+                    velocidadBolitaX = dirX * nuevaVelocidad;
+                    velocidadBolitaY = dirY * nuevaVelocidad;
+                    siguienteClickAcelera = true; // El siguiente click acelerará
+                }
+            }
         } else {
             // Si el control por movimiento está activo, un clic no hace nada (o podría pausar, etc.)
             // Por ahora, no hace nada para evitar interrupciones.
