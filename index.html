@@ -212,6 +212,29 @@ const messageBox = document.getElementById('messageBox');
 const messageText = document.getElementById('messageText');
 const messageBoxButton = document.getElementById('messageBoxButton');
 
+// Audio
+let audioContext;
+function initAudio() {
+    try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+        console.warn('Web Audio API not supported');
+    }
+}
+function playTone(frequency, duration, volume = 0.1, type = 'sine') {
+    if (!audioContext) return;
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+    oscillator.type = type;
+    gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + duration);
+}
+
 // Función para mostrar un mensaje en una caja de diálogo personalizada
 function showMessage(message, buttonText = "OK", callback = null) {
     messageText.textContent = message;
@@ -358,6 +381,7 @@ function actualizarAnillos() {
 
             if (anillo.radio <= radioMinimo) {
                 crearParticulasDesintegracion(anillo);
+                playTone(400, 0.3); // Sonido de romper anillo
                 anillo.eliminado = true;
                 anillos.splice(i, 1);
                 i--;
@@ -471,6 +495,7 @@ function actualizarBolita() {
                     anilloId: anillo.id,
                     tiempo: ahora
                 };
+                playTone(800, 0.1); // Sonido de rebote
             }
 
             if (!anillo.cruzado) {
@@ -484,6 +509,7 @@ function actualizarBolita() {
              (!anillo.interior && distancia < anillo.radio - margen)) &&
             !dentroDelArco) {
             crearParticulasDesintegracion(anillo);
+            playTone(400, 0.3); // Sonido de romper anillo
             anillo.eliminado = true;
             anillos.splice(i, 1);
             i--;
@@ -840,6 +866,7 @@ function bucleJuego() {
 // Inicialización: se llama una vez al cargar la página
 window.onload = function() {
     redimensionarCanvas(); // Establecer dimensiones iniciales y escalar parámetros
+    initAudio(); // Inicializar audio
     inicializarAnillos();
     inicializarBolita();
 
