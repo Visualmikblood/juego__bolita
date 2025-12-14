@@ -65,6 +65,28 @@
         .message-box button {
             margin-top: 15px;
         }
+        #restartButton {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #33FF57;
+            color: black;
+            padding: 15px 30px;
+            font-size: 20px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 0 15px lime;
+            z-index: 2000;
+            display: none; /* Oculto por defecto */
+            font-family: 'Inter', sans-serif;
+            font-weight: bold;
+        }
+        #restartButton:hover {
+            background-color: #2ECC40;
+            transform: translate(-50%, -50%) scale(1.1);
+        }
     </style>
 </head>
 <body>
@@ -74,6 +96,8 @@
 <div class="controls">
     <button id="motionControlButton" style="display:none;">Activar Control por Movimiento</button>
 </div>
+
+<button id="restartButton">Volver a jugar</button>
 
 <div id="messageBox" class="message-box">
     <p id="messageText"></p>
@@ -160,6 +184,7 @@ let oldScaleFactor = 1;
 
 // Elementos del DOM para la interfaz de usuario
 const motionControlButton = document.getElementById('motionControlButton');
+const restartButton = document.getElementById('restartButton');
 const messageBox = document.getElementById('messageBox');
 const messageText = document.getElementById('messageText');
 const messageBoxButton = document.getElementById('messageBoxButton');
@@ -325,6 +350,7 @@ function actualizarAnillos() {
         dispararFuegosArtificiales = true;
         gameOverX = bolitaX;
         gameOverY = bolitaY;
+        restartButton.style.display = 'block'; // Mostrar botón de reinicio
     }
 }
 
@@ -631,6 +657,7 @@ function reiniciarJuego() {
         dispararFuegosArtificiales = false;
         fuegosArtificiales = [];
         tiempoUltimoFrame = Date.now();
+        restartButton.style.display = 'none'; // Ocultar botón de reinicio
         // Al reiniciar, si el control por movimiento estaba activo, se mantiene activo
         // Si no, se queda en el control por clic
     }
@@ -742,9 +769,12 @@ canvas.addEventListener('click', function(event) {
         // Crear fuegos artificiales en la posición del clic después del Game Over
         crearFuegoArtificial(event.clientX, event.clientY);
     } else {
-        reiniciarJuego(); // Reiniciar el juego si no está activo
+        // reiniciarJuego(); // Desactivado para usar solo el botón
     }
 });
+
+// Listener para el botón de reinicio
+restartButton.addEventListener('click', reiniciarJuego);
 
 // Listener para el botón de control por movimiento
 motionControlButton.addEventListener('click', () => {
