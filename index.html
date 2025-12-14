@@ -370,16 +370,13 @@ function actualizarBolita() {
         rastro.shift();
     }
 
-    // Solo aplicar gravedad si el control por movimiento no está activo
-    // La aceleración del dispositivo ya incluye la gravedad
+    // Aplicar velocidad siempre
+    bolitaX += velocidadBolitaX;
+    bolitaY += velocidadBolitaY;
+
+    // Solo aplicar gravedad si el control por movimiento NO está activo
     if (!motionControlActive) {
-        bolitaX += velocidadBolitaX;
-        bolitaY += velocidadBolitaY;
         velocidadBolitaY += gravedad;
-    } else {
-        // Si el control por movimiento está activo, la velocidad ya se actualiza en handleMotion
-        bolitaX += velocidadBolitaX;
-        bolitaY += velocidadBolitaY;
     }
 
 
@@ -645,9 +642,11 @@ function handleMotion(event) {
     const ay = event.accelerationIncludingGravity.y;
 
     // Ajustar las velocidades de la bolita basadas en la inclinación del dispositivo
-    // El eje Y del acelerómetro suele estar invertido respecto al eje Y del canvas
-    velocidadBolitaX += ax * motionControlSensitivity * scaleFactor;
-    velocidadBolitaY += -ay * motionControlSensitivity * scaleFactor; // Multiplicar por -1 para invertir el eje Y
+    // Invertimos el eje X para que se sienta más natural (según feedback)
+    velocidadBolitaX -= ax * motionControlSensitivity * scaleFactor;
+    
+    // Eje Y: Habilitado de nuevo, pero invertido para que inclinar hacia adelante (arriba) suba la bolita
+    velocidadBolitaY += ay * motionControlSensitivity * scaleFactor;
 }
 
 // Función para determinar si es un dispositivo móvil (para mostrar el botón de control por movimiento)
