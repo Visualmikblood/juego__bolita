@@ -730,9 +730,9 @@ canvas.addEventListener('click', function(event) {
                 }
             }
         } else {
-            // Si el control por movimiento está activo, un clic no hace nada (o podría pausar, etc.)
-            // Por ahora, no hace nada para evitar interrupciones.
-            // showMessage("El control por movimiento está activo. El click está deshabilitado.", "OK");
+            // Si el control por movimiento está activo, el click hace que la bolita salte
+            const fuerzaSalto = 10 * scaleFactor;
+            velocidadBolitaY -= fuerzaSalto; // Restar a Y para ir hacia arriba
         }
     } else if (dispararFuegosArtificiales) {
         // Crear fuegos artificiales en la posición del clic después del Game Over
